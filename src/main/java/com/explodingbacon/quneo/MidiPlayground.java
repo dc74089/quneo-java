@@ -5,7 +5,7 @@ import java.io.IOException;
 
 import static javax.sound.midi.ShortMessage.*;
 
-public class Tester {
+public class MidiPlayground {
     private static Transmitter t = new Transmitter();
     private static Receiver mReceiver = new Receiver();
 
@@ -15,7 +15,7 @@ public class Tester {
      * Control Change: -80
      **/
 
-    public static void main(String ... args) throws IOException {
+    public static void main(String... args) throws IOException {
         MidiDevice device = null;
         MidiDevice.Info[] infos = MidiSystem.getMidiDeviceInfo();
 

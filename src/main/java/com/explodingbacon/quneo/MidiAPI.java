@@ -1,22 +1,35 @@
 package com.explodingbacon.quneo;
 
 import javax.sound.midi.*;
-
-import static javax.sound.midi.ShortMessage.*;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.*;
 
 public class MidiAPI {
     private Transmitter t = new Transmitter();
     private Receiver mReceiver = new Receiver();
+    private Map<String, List<MidiAPIListener>> registrationMap = new HashMap<>();
+    private MessageDigest md;
+
+    public static final int CONTROL_CHANGE = -80;
+    public static final int NOTE_ON = -112;
+    public static final int NOTE_OFF = -128;
 
     public MidiAPI(String deviceName) {
         MidiDevice device = null;
         MidiDevice.Info[] infos = MidiSystem.getMidiDeviceInfo();
 
+        try {
+            md = MessageDigest.getInstance("SHA-1");
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("Error initializing MessageDigest", e);
+        }
+
         Boolean foundDevice = false;
         for(MidiDevice.Info info : infos) {
             if(info.getName().equals(deviceName)) {
                 foundDevice = true;
-                System.out.println("Found a matching device");
+                //System.out.println("Found a matching device");
 
                 try {
                     device = MidiSystem.getMidiDevice(info);
@@ -34,7 +47,7 @@ public class MidiAPI {
 
                         device.open();
                     } catch (MidiUnavailableException e) {
-                        throw new RuntimeException("There was an error trying to open the MIDI device.", e);
+                        throw new MidiDeviceNotFoundException("There was an error trying to open the MIDI device.", e);
                     }
                 }
             }
@@ -44,11 +57,22 @@ public class MidiAPI {
     }
 
     public interface MidiAPIListener {
-        void onMidiEvent(EventType eventType, int channel, byte note, byte data);
+        void onMidiEvent(int eventType, int channel, byte note, byte data);
     }
 
-    public void registerListener(EventType type, int channel, byte note) {
-        //TODO: This.
+    public void registerListener(MidiAPIListener listener, int type, int channel, int... notes) {
+        for(int n : notes) {
+            String hash = hashOfMessage(type, channel, n);
+
+            registrationMap.putIfAbsent(hash, new ArrayList<>());
+            registrationMap.get(hash).add(listener);
+        }
+    }
+
+    private String hashOfMessage(int type, int channel, int note) {
+        md.reset();
+        String input = "t"+type+"c"+channel+"n"+note;
+        return Arrays.toString(md.digest(input.getBytes()));
     }
 
     private class Transmitter implements javax.sound.midi.Transmitter {
@@ -99,8 +123,17 @@ public class MidiAPI {
     private class Receiver implements javax.sound.midi.Receiver {
 
         @Override
-        public void send(MidiMessage message, long timeStamp) {
-            //TODO: Handle incoming messages
+        public void send(MidiMessage message, long timeStamp) { //TODO: Figure out channels
+            byte[] msg = message.getMessage();
+            int messageType = msg[0] == -80 ? CONTROL_CHANGE : msg[0] == -112 ? NOTE_ON : msg[0] == -128 ? NOTE_OFF : 0;
+            String messageHash = hashOfMessage(messageType, 1, msg[1]);
+            if(registrationMap.get(messageHash) != null) {
+                for (MidiAPIListener l : registrationMap.get(messageHash)) {
+                    l.onMidiEvent(messageType, 1, msg[1], msg[2]);
+                }
+            } else if(messageType == NOTE_ON) {
+                System.out.println("Null entry for hash " + messageHash);
+            }
         }
 
         @Override
@@ -113,11 +146,9 @@ public class MidiAPI {
         MidiDeviceNotFoundException(String cause) {
             super(cause);
         }
-    }
 
-    public interface EventType {
-        int CONTROL_CHANGE = -80;
-        int NOTE_ON = -112;
-        int NOTE_OFF = -128;
+        MidiDeviceNotFoundException(String cause, Throwable e) {
+            super(cause, e);
+        }
     }
 }
