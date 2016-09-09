@@ -69,6 +69,22 @@ public class MidiAPI {
         }
     }
 
+    public void sendCC(byte note, byte data) {
+        t.sendCC(note, data);
+    }
+
+    public void sendCC(int channel, byte note, byte data) {
+        t.sendCC(channel, note, data);
+    }
+
+    public void sendNote(byte channel, Boolean on, byte note) {
+        t.sendNote(on, note, channel);
+    }
+
+    public void sendNote(byte channel, Boolean on, byte note, byte velocity) {
+        t.sendNote(on, channel, note, velocity);
+    }
+
     private String hashOfMessage(int type, int channel, int note) {
         md.reset();
         String input = "t"+type+"c"+channel+"n"+note;
